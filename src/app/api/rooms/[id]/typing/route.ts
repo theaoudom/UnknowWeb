@@ -17,8 +17,8 @@ export async function POST(request: Request, props: Props) {
             return NextResponse.json({ error: 'Missing userName' }, { status: 400 });
         }
 
-        // Emit typing event
-        store.emit(`typing:${params.id}`, {
+        // Emit typing event via Redis Pub/Sub
+        await store.emitTyping(params.id, {
             roomId: params.id,
             userName,
             isTyping

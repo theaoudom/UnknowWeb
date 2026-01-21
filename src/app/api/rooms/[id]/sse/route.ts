@@ -63,6 +63,11 @@ export async function GET(
                 controller.enqueue(encoder.encode(`event: presence\ndata: ${JSON.stringify(event)}\n\n`));
             }
 
+            // Subscribe to Redis Pub/Sub channels
+            await store.subscribe(`message:${roomId}`);
+            await store.subscribe(`typing:${roomId}`);
+            await store.subscribe(`presence:${roomId}`);
+
             store.on(`message:${roomId}`, onMessage);
             store.on(`typing:${roomId}`, onTyping);
             store.on(`presence:${roomId}`, onPresence);
@@ -70,6 +75,12 @@ export async function GET(
             // Clean up on close (handled by client disconnect usually)
             request.signal.addEventListener('abort', async () => {
                 clearInterval(keepAlive);
+
+                // Unsubscribe from Redis Pub/Sub
+                await store.unsubscribe(`message:${roomId}`);
+                await store.unsubscribe(`typing:${roomId}`);
+                await store.unsubscribe(`presence:${roomId}`);
+
                 store.off(`message:${roomId}`, onMessage);
                 store.off(`typing:${roomId}`, onTyping);
                 store.off(`presence:${roomId}`, onPresence);

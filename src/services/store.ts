@@ -9,13 +9,47 @@ const ROOM_TTL = 60 * 60 * 24; // 24 hours in seconds
 const useGenericRedis = !!process.env.REDIS_URL;
 const genericRedis = useGenericRedis ? new Redis(process.env.REDIS_URL!) : null;
 
+// Create a separate Redis client for Pub/Sub (required by ioredis)
+const pubSubRedis = useGenericRedis ? new Redis(process.env.REDIS_URL!) : null;
+
 class Store extends EventEmitter {
     constructor() {
         super();
+
+        // Set up Redis Pub/Sub subscriber if using generic Redis
+        if (pubSubRedis) {
+            pubSubRedis.on('message', (channel, message) => {
+                // Re-emit to local EventEmitter for SSE listeners
+                this.emit(channel, JSON.parse(message));
+            });
+        }
     }
 
     private getRoomKey(id: string): string {
         return `room:${id}`;
+    }
+
+    // Subscribe to a channel (for SSE)
+    async subscribe(channel: string): Promise<void> {
+        if (pubSubRedis) {
+            await pubSubRedis.subscribe(channel);
+        }
+    }
+
+    // Unsubscribe from a channel
+    async unsubscribe(channel: string): Promise<void> {
+        if (pubSubRedis) {
+            await pubSubRedis.unsubscribe(channel);
+        }
+    }
+
+    // Publish an event to Redis (cross-instance)
+    private async publish(channel: string, data: any): Promise<void> {
+        if (genericRedis) {
+            await genericRedis.publish(channel, JSON.stringify(data));
+        }
+        // Also emit locally for same-instance listeners
+        this.emit(channel, data);
     }
 
     async createRoom(name: string, creatorName: string): Promise<Room> {
@@ -80,8 +114,8 @@ class Store extends EventEmitter {
         room.activeUsers.add(userName);
         await this.saveRoom(room);
 
-        // Emit 'presence' event so SSE picks it up
-        this.emit(`presence:${roomId}`, {
+        // Publish presence event via Redis Pub/Sub
+        await this.publish(`presence:${roomId}`, {
             type: 'join',
             userName,
             activeUsers: Array.from(room.activeUsers)
@@ -95,7 +129,8 @@ class Store extends EventEmitter {
         room.activeUsers.delete(userName);
         await this.saveRoom(room);
 
-        this.emit(`presence:${roomId}`, {
+        // Publish presence event via Redis Pub/Sub
+        await this.publish(`presence:${roomId}`, {
             type: 'leave',
             userName,
             activeUsers: Array.from(room.activeUsers)
@@ -115,8 +150,8 @@ class Store extends EventEmitter {
 
         await this.saveRoom(room);
 
-        // Emit event for SSE listeners
-        this.emit(`message:${roomId}`, newMessage);
+        // Publish message event via Redis Pub/Sub
+        await this.publish(`message:${roomId}`, newMessage);
 
         return newMessage;
     }
@@ -136,6 +171,11 @@ class Store extends EventEmitter {
             result = await kv.del(this.getRoomKey(id));
         }
         return result > 0;
+    }
+
+    // Emit typing event via Redis Pub/Sub
+    async emitTyping(roomId: string, data: any): Promise<void> {
+        await this.publish(`typing:${roomId}`, data);
     }
 
     private async saveRoom(room: Room): Promise<void> {
