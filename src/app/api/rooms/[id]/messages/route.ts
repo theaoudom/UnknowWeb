@@ -10,7 +10,7 @@ type Props = {
 
 export async function GET(request: Request, props: Props) {
     const params = await props.params;
-    const messages = store.getMessages(params.id);
+    const messages = await store.getMessages(params.id);
 
     if (!messages) {
         return NextResponse.json(
@@ -34,7 +34,7 @@ export async function POST(request: Request, props: Props) {
             );
         }
 
-        const message = store.addMessage(params.id, {
+        const message = await store.addMessage(params.id, {
             senderId: body.senderId,
             senderName: body.senderName,
             content: body.content,

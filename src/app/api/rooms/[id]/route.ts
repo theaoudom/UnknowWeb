@@ -10,7 +10,7 @@ type Props = {
 
 export async function GET(request: Request, props: Props) {
     const params = await props.params;
-    const room = store.getRoom(params.id);
+    const room = await store.getRoom(params.id);
 
     if (!room) {
         return NextResponse.json(
@@ -24,14 +24,14 @@ export async function GET(request: Request, props: Props) {
 
 export async function DELETE(request: Request, props: Props) {
     const params = await props.params;
-    const success = store.deleteRoom(params.id);
+    const deleted = await store.deleteRoom(params.id);
 
-    if (!success) {
+    if (!deleted) {
         return NextResponse.json(
-            { error: 'Room not found or already deleted' },
+            { error: 'Room not found' },
             { status: 404 }
         );
     }
 
-    return NextResponse.json({ success: true, message: 'Room deleted' });
+    return NextResponse.json({ success: true });
 }

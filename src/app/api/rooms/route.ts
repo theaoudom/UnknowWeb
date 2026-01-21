@@ -8,12 +8,12 @@ export async function POST(request: Request) {
 
         if (!body.name || !body.creatorName) {
             return NextResponse.json(
-                { error: 'Room name and creator name are required' },
+                { error: 'Missing required fields' },
                 { status: 400 }
             );
         }
 
-        const room = store.createRoom(body.name, body.creatorName);
+        const room = await store.createRoom(body.name, body.creatorName);
 
         return NextResponse.json(room);
     } catch (error) {

@@ -20,7 +20,7 @@ export async function POST(request: Request, props: Props) {
             );
         }
 
-        const success = store.joinRoom(params.id, body.userName);
+        const success = await store.joinRoom(params.id, body.userName);
 
         if (!success) {
             return NextResponse.json(
@@ -29,7 +29,8 @@ export async function POST(request: Request, props: Props) {
             );
         }
 
-        return NextResponse.json({ success: true, message: 'Joined room' });
+        // Store user in localStorage (handled client-side)
+        return NextResponse.json({ success: true, roomId: params.id });
     } catch (error) {
         return NextResponse.json(
             { error: 'Failed to join room' },

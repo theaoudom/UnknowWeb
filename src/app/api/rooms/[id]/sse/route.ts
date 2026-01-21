@@ -12,18 +12,19 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams;
     const userName = searchParams.get('userName');
 
-    if (!store.getRoom(roomId)) {
+    const room = await store.getRoom(roomId);
+    if (!room) {
         return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     }
 
     console.log(`[SSE] New connection request for room ${roomId} user ${userName}`);
 
     if (userName) {
-        store.addActiveUser(roomId, userName);
+        await store.addActiveUser(roomId, userName);
     }
 
     const stream = new ReadableStream({
-        start(controller) {
+        async start(controller) {
             console.log(`[SSE] Stream started for ${userName}`);
             const encoder = new TextEncoder();
 
@@ -33,11 +34,11 @@ export async function GET(
             };
 
             // Send initial presence immediately to self
-            const room = store.getRoom(roomId);
-            if (room) {
+            const roomData = await store.getRoom(roomId);
+            if (roomData) {
                 const presenceData = {
                     type: 'init',
-                    activeUsers: Array.from(room.activeUsers)
+                    activeUsers: Array.from(roomData.activeUsers)
                 };
                 controller.enqueue(encoder.encode(`event: presence\ndata: ${JSON.stringify(presenceData)}\n\n`));
             }
@@ -67,14 +68,14 @@ export async function GET(
             store.on(`presence:${roomId}`, onPresence);
 
             // Clean up on close (handled by client disconnect usually)
-            request.signal.addEventListener('abort', () => {
+            request.signal.addEventListener('abort', async () => {
                 clearInterval(keepAlive);
                 store.off(`message:${roomId}`, onMessage);
                 store.off(`typing:${roomId}`, onTyping);
                 store.off(`presence:${roomId}`, onPresence);
 
                 if (userName) {
-                    store.removeActiveUser(roomId, userName);
+                    await store.removeActiveUser(roomId, userName);
                 }
                 controller.close();
             });
