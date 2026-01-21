@@ -140,10 +140,15 @@ export function ChatInterface({ roomId }: { roomId: string }) {
         }, 2000);
     }
 
+    const [isSending, setIsSending] = useState(false);
+
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !currentUser) return;
+        if (!newMessage.trim() || !currentUser || isSending) return;
 
+        setIsSending(true);
+
+        // Clear typing indicator immediately
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         fetch(`/api/rooms/${roomId}/typing`, {
             method: 'POST',
@@ -152,7 +157,7 @@ export function ChatInterface({ roomId }: { roomId: string }) {
         }).catch(() => { });
 
         try {
-            await fetch(`/api/rooms/${roomId}/messages`, {
+            const res = await fetch(`/api/rooms/${roomId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -161,9 +166,15 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                     content: newMessage,
                 }),
             });
+
+            if (!res.ok) throw new Error('Failed to send');
+
             setNewMessage('');
         } catch (error) {
-            console.error('Failed to send message');
+            console.error('Failed to send message:', error);
+            alert('Failed to send message. Please try again or refresh.');
+        } finally {
+            setIsSending(false);
         }
     };
 
@@ -338,15 +349,20 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                                     setNewMessage(e.target.value);
                                     handleTyping();
                                 }}
-                                className="flex-1 bg-transparent border-none text-white px-4 py-3 focus:outline-none placeholder:text-zinc-600 font-medium"
-                                placeholder="Type an encrypted message..."
+                                disabled={isSending}
+                                className="flex-1 bg-transparent border-none text-white px-4 py-3 focus:outline-none placeholder:text-zinc-600 font-medium disabled:opacity-50"
+                                placeholder={isSending ? "Sending..." : "Type an encrypted message..."}
                             />
                             <button
                                 type="submit"
-                                disabled={!newMessage.trim()}
-                                className="p-3 bg-white text-black rounded-xl hover:bg-zinc-200 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 disabled:bg-zinc-800 disabled:text-zinc-600 shadow-lg shadow-white/5"
+                                disabled={!newMessage.trim() || isSending}
+                                className="p-3 bg-white text-black rounded-xl hover:bg-zinc-200 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 disabled:bg-zinc-800 disabled:text-zinc-600 shadow-lg shadow-white/5 flex items-center justify-center"
                             >
-                                <Send size={18} fill="currentColor" strokeWidth={2.5} />
+                                {isSending ? (
+                                    <div className="w-5 h-5 border-2 border-zinc-500 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <Send size={18} fill="currentColor" strokeWidth={2.5} />
+                                )}
                             </button>
                         </form>
                     </div>
