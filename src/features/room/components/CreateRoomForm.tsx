@@ -3,11 +3,19 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { RotateCw } from 'lucide-react';
+import { generateAnonymousName } from '@/lib/generators';
 
 export function CreateRoomForm() {
     const router = useRouter();
     const [name, setName] = useState('');
     const [creatorName, setCreatorName] = useState('');
+
+    // Auto-generate name on mount
+    useState(() => {
+        setCreatorName(generateAnonymousName());
+    });
+
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -22,10 +30,16 @@ export function CreateRoomForm() {
             });
 
             if (res.ok) {
-                const room = await res.json();
+                const data = await res.json();
                 // Store user identity in localStorage (anonymous session)
-                localStorage.setItem(`unknow_user_${room.id}`, creatorName);
-                router.push(`/rooms/${room.id}`);
+                localStorage.setItem(`unknow_user_${data.id}`, creatorName);
+
+                // Store admin key if present
+                if (data.adminKey) {
+                    localStorage.setItem(`unknow_admin_${data.id}`, data.adminKey);
+                }
+
+                router.push(`/rooms/${data.id}`);
             } else {
                 alert('Failed to create room');
             }
@@ -57,14 +71,24 @@ export function CreateRoomForm() {
             </div>
             <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Your Alias</label>
-                <input
-                    type="text"
-                    value={creatorName}
-                    onChange={(e) => setCreatorName(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/20 transition-all placeholder:text-zinc-600"
-                    placeholder="e.g. Agent 47"
-                    required
-                />
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={creatorName}
+                        onChange={(e) => setCreatorName(e.target.value)}
+                        className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/20 transition-all placeholder:text-zinc-600"
+                        placeholder="e.g. Agent 47"
+                        required
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setCreatorName(generateAnonymousName())}
+                        className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg transition-colors border border-zinc-800"
+                        title="Random Alias"
+                    >
+                        <RotateCw size={18} />
+                    </button>
+                </div>
             </div>
             <button
                 type="submit"

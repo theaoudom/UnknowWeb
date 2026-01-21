@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { CreateRoomForm } from '@/features/room/components/CreateRoomForm';
-import { JoinRoomForm } from '@/features/room/components/JoinRoomForm';
+import { TopicList } from '@/features/room/components/TopicList';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Zap, Ghost, Lock, Users } from 'lucide-react';
 
@@ -95,8 +95,8 @@ export default function Home() {
               <button
                 onClick={() => setActiveTab('create')}
                 className={`flex-1 py-3 text-sm font-medium rounded-lg transition-all duration-300 ${activeTab === 'create'
-                    ? 'bg-zinc-800 text-white shadow-lg ring-1 ring-white/10'
-                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                  ? 'bg-zinc-800 text-white shadow-lg ring-1 ring-white/10'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
                   }`}
               >
                 Create Room
@@ -104,11 +104,11 @@ export default function Home() {
               <button
                 onClick={() => setActiveTab('join')}
                 className={`flex-1 py-3 text-sm font-medium rounded-lg transition-all duration-300 ${activeTab === 'join'
-                    ? 'bg-zinc-800 text-white shadow-lg ring-1 ring-white/10'
-                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                  ? 'bg-zinc-800 text-white shadow-lg ring-1 ring-white/10'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
                   }`}
               >
-                Join existing
+                Confessions Board
               </button>
             </div>
 
@@ -131,7 +131,7 @@ export default function Home() {
                   exit={{ opacity: 0, x: -10 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <JoinRoomForm />
+                  <TopicList />
                 </motion.div>
               )}
             </AnimatePresence>

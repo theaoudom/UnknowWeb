@@ -19,6 +19,7 @@ export interface Room {
     users: string[]; // List of historical joined users
     activeUsers: Set<string>; // Currently connected
     messages: Message[];
+    adminKey?: string; // Secret key for deletion (server-only ideally, but stored in object for simplicity)
 }
 
 export type CreateRoomRequest = {

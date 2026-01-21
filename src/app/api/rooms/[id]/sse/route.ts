@@ -28,9 +28,19 @@ export async function GET(
             console.log(`[SSE] Stream started for ${userName}`);
             const encoder = new TextEncoder();
 
+            // Helper to safely enqueue data
+            const safeEnqueue = (data: Uint8Array) => {
+                try {
+                    controller.enqueue(data);
+                } catch (e) {
+                    // Controller might be closed or erroring
+                    console.warn('[SSE] Failed to enqueue, controller closed?', e);
+                }
+            };
+
             const sendEvent = (data: any) => {
                 console.log(`[SSE] Sending message to ${userName}`);
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+                safeEnqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
             };
 
             // Send initial presence immediately to self
@@ -40,12 +50,12 @@ export async function GET(
                     type: 'init',
                     activeUsers: Array.from(roomData.activeUsers)
                 };
-                controller.enqueue(encoder.encode(`event: presence\ndata: ${JSON.stringify(presenceData)}\n\n`));
+                safeEnqueue(encoder.encode(`event: presence\ndata: ${JSON.stringify(presenceData)}\n\n`));
             }
 
             // Keep connection alive
             const keepAlive = setInterval(() => {
-                controller.enqueue(encoder.encode(': keep-alive\n\n'));
+                safeEnqueue(encoder.encode(': keep-alive\n\n'));
             }, 15000);
 
             const onMessage = (message: Message) => {
@@ -56,11 +66,11 @@ export async function GET(
                 // SSE format:
                 // event: typing
                 // data: {...}
-                controller.enqueue(encoder.encode(`event: typing\ndata: ${JSON.stringify(event)}\n\n`));
+                safeEnqueue(encoder.encode(`event: typing\ndata: ${JSON.stringify(event)}\n\n`));
             };
 
             const onPresence = (event: any) => {
-                controller.enqueue(encoder.encode(`event: presence\ndata: ${JSON.stringify(event)}\n\n`));
+                safeEnqueue(encoder.encode(`event: presence\ndata: ${JSON.stringify(event)}\n\n`));
             }
 
             // Subscribe to Redis Pub/Sub channels
@@ -88,7 +98,7 @@ export async function GET(
                 if (userName) {
                     await store.removeActiveUser(roomId, userName);
                 }
-                controller.close();
+                // Do not call controller.close() here; stream is already aborted
             });
         },
     });

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Message, Room } from '@/types';
-import { Trash2, Send, LogOut, ShieldCheck, User, Users, Ghost } from 'lucide-react';
+import EmojiPicker, { Theme } from 'emoji-picker-react';
+import { Trash2, Send, LogOut, ShieldCheck, User, Users, Ghost, Smile } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function ChatInterface({ roomId }: { roomId: string }) {
@@ -18,11 +19,17 @@ export function ChatInterface({ roomId }: { roomId: string }) {
 
     const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
     const [activeUsers, setActiveUsers] = useState<string[]>([]);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Load user from local storage
     useEffect(() => {
         const user = localStorage.getItem(`unknow_user_${roomId}`);
+        const adminKey = localStorage.getItem(`unknow_admin_${roomId}`);
+
+        if (adminKey) setIsAdmin(true);
+
         if (!user) {
             router.push('/');
             return;
@@ -180,9 +187,27 @@ export function ChatInterface({ roomId }: { roomId: string }) {
 
     const handleEndChat = async () => {
         if (!confirm('Are you sure? This will delete the room and all messages for everyone forever.')) return;
+
+        const adminKey = localStorage.getItem(`unknow_admin_${roomId}`);
+        if (!adminKey) {
+            alert('You do not have permission to delete this room.');
+            return;
+        }
+
         try {
-            await fetch(`/api/rooms/${roomId}`, { method: 'DELETE' });
-            router.push('/');
+            const res = await fetch(`/api/rooms/${roomId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ adminKey })
+            });
+
+            if (res.ok) {
+                localStorage.removeItem(`unknow_admin_${roomId}`);
+                localStorage.removeItem(`unknow_user_${roomId}`);
+                router.push('/');
+            } else {
+                alert('Failed to delete room. Permission denied.');
+            }
         } catch (error) {
             alert('Failed to end chat');
         }
@@ -236,17 +261,6 @@ export function ChatInterface({ roomId }: { roomId: string }) {
 
                     <div className="flex items-center gap-1">
                         <button
-                            onClick={() => {
-                                navigator.clipboard.writeText(roomId);
-                                alert('Room ID copied! Share it with others so they can join.');
-                            }}
-                            className="p-2.5 text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-xl transition-all duration-200 flex items-center justify-center"
-                            title="Copy Room ID"
-                        >
-                            <Send size={20} className="rotate-[-45deg] ml-[-2px] mt-1" />
-                        </button>
-                        <div className="w-px h-6 bg-zinc-800 mx-1" />
-                        <button
                             onClick={handleLeave}
                             className="p-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800/50 rounded-xl transition-all duration-200"
                             title="Leave Room"
@@ -254,19 +268,22 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                             <LogOut size={20} />
                         </button>
                         <div className="w-px h-6 bg-zinc-800 mx-1" />
-                        <button
-                            onClick={handleEndChat}
-                            className="group flex items-center gap-2 px-3 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all duration-200 text-sm font-medium ml-1"
-                            title="Delete Room for Everyone"
-                        >
-                            <Trash2 size={16} className="group-hover:scale-110 transition-transform" />
-                            <span className="hidden sm:inline">End & Destroy</span>
-                        </button>
+                        {isAdmin && (
+                            <button
+                                onClick={handleEndChat}
+                                className="group flex items-center gap-2 px-3 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all duration-200 text-sm font-medium ml-1"
+                                title="Delete Room for Everyone"
+                            >
+                                <Trash2 size={16} className="group-hover:scale-110 transition-transform" />
+                                <span className="hidden sm:inline">End & Destroy</span>
+                            </button>
+                        )}
                     </div>
                 </header>
 
                 {/* Messages Area */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                {/* Messages Area */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 no-scrollbar">
                     {messages.length === 0 && (
                         <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-4 opacity-50">
                             <Ghost size={48} strokeWidth={1} />
@@ -277,7 +294,25 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                     <AnimatePresence initial={false}>
                         {messages.map((msg, i) => {
                             const isMe = msg.senderName === currentUser;
-                            const isSystem = msg.senderName === 'System'; // Future proofing
+                            const isSystem = msg.senderName === 'System';
+
+                            // Deterministic color based on sender name
+                            const getAvatarColor = (name: string) => {
+                                const colors = [
+                                    'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-green-500',
+                                    'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-blue-500',
+                                    'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500',
+                                    'bg-pink-500', 'bg-rose-500'
+                                ];
+                                let hash = 0;
+                                for (let i = 0; i < name.length; i++) {
+                                    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+                                }
+                                return colors[Math.abs(hash) % colors.length];
+                            };
+
+                            const avatarColor = getAvatarColor(msg.senderName);
+                            const initials = msg.senderName.slice(0, 2).toUpperCase();
 
                             return (
                                 <motion.div
@@ -286,16 +321,21 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     layout
                                     className={cn(
-                                        "flex w-full",
+                                        "flex w-full gap-3",
                                         isMe ? 'justify-end' : 'justify-start'
                                     )}
                                 >
+                                    {!isMe && (
+                                        <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white shadow-lg ${avatarColor}`}>
+                                            {initials}
+                                        </div>
+                                    )}
+
                                     <div className={cn(
-                                        "flex flex-col max-w-[85%] sm:max-w-[70%]",
+                                        "flex flex-col max-w-[80%] sm:max-w-[70%]",
                                         isMe ? "items-end" : "items-start"
                                     )}>
                                         <span className="text-[10px] text-zinc-500 mb-1 px-1 flex items-center gap-1">
-                                            {!isMe && <User size={10} />}
                                             {isMe ? 'You' : msg.senderName}
                                             <span className="opacity-50 mx-1">•</span>
                                             {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -304,8 +344,8 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                                         <div className={cn(
                                             "px-5 py-3 rounded-2xl text-sm leading-relaxed shadow-sm break-words relative group transition-all duration-200",
                                             isMe
-                                                ? "bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-tr-sm shadow-blue-900/20"
-                                                : "bg-zinc-800/80 backdrop-blur-sm border border-zinc-700/50 text-zinc-100 rounded-tl-sm hover:bg-zinc-800"
+                                                ? "bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded-tr-sm shadow-indigo-900/20"
+                                                : "bg-zinc-800/80 backdrop-blur-sm border border-zinc-700/50 text-zinc-100 rounded-tl-sm hover:bg-zinc-800 shadow-lg"
                                         )}>
                                             {msg.content}
                                         </div>
@@ -340,7 +380,43 @@ export function ChatInterface({ roomId }: { roomId: string }) {
 
                 {/* Input Area */}
                 <div className="p-4 sm:p-6 bg-gradient-to-t from-black via-zinc-950/80 to-transparent">
-                    <div className="relative bg-zinc-900/90 backdrop-blur-md rounded-2xl border border-zinc-800 shadow-2xl p-2 flex items-center gap-2 ring-1 ring-white/5 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300">
+                    <div className="relative bg-zinc-900/90 backdrop-blur-md rounded-2xl border border-zinc-800 shadow-2xl p-2 flex items-center gap-2 ring-1 ring-white/5 focus-within:ring-violet-500/50 focus-within:border-violet-500/50 transition-all duration-300">
+                        {/* Emoji Picker Button */}
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                                className={cn(
+                                    "p-3 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-yellow-400 transition-colors",
+                                    showEmojiPicker && "text-yellow-400 bg-zinc-800"
+                                )}
+                            >
+                                <Smile size={20} />
+                            </button>
+
+                            <AnimatePresence>
+                                {showEmojiPicker && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        className="absolute bottom-full left-0 mb-4 z-50 origin-bottom-left shadow-2xl rounded-2xl overflow-hidden ring-1 ring-white/10"
+                                    >
+                                        <EmojiPicker
+                                            theme={Theme.DARK}
+                                            onEmojiClick={(emojiData) => {
+                                                setNewMessage(prev => prev + emojiData.emoji);
+                                                setShowEmojiPicker(false);
+                                            }}
+                                            lazyLoadEmojis={true}
+                                            searchDisabled={false}
+                                            skinTonesDisabled={true}
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
                         <form onSubmit={handleSendMessage} className="flex-1 flex gap-2">
                             <input
                                 type="text"
@@ -350,7 +426,7 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                                     handleTyping();
                                 }}
                                 disabled={isSending}
-                                className="flex-1 bg-transparent border-none text-white px-4 py-3 focus:outline-none placeholder:text-zinc-600 font-medium disabled:opacity-50"
+                                className="flex-1 bg-transparent border-none text-white px-2 py-3 focus:outline-none placeholder:text-zinc-600 font-medium disabled:opacity-50"
                                 placeholder={isSending ? "Sending..." : "Type an encrypted message..."}
                             />
                             <button
