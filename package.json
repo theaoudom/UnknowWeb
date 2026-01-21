@@ -12,6 +12,7 @@
     "@vercel/kv": "^3.0.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.27.5",
+    "ioredis": "^5.9.2",
     "lucide-react": "^0.562.0",
     "next": "16.1.4",
     "react": "19.2.3",

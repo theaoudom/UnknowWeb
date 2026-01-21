@@ -1,8 +1,13 @@
 import { Room, Message } from '@/types';
 import { EventEmitter } from 'events';
 import { kv } from '@vercel/kv';
+import Redis from 'ioredis';
 
 const ROOM_TTL = 60 * 60 * 24; // 24 hours in seconds
+
+// Support both KV (REST API) and generic Redis URL
+const useGenericRedis = !!process.env.REDIS_URL;
+const genericRedis = useGenericRedis ? new Redis(process.env.REDIS_URL!) : null;
 
 class Store extends EventEmitter {
     constructor() {
@@ -30,12 +35,23 @@ class Store extends EventEmitter {
             activeUsers: Array.from(room.activeUsers),
         };
 
-        await kv.set(this.getRoomKey(id), JSON.stringify(serialized), { ex: ROOM_TTL });
+        if (useGenericRedis && genericRedis) {
+            await genericRedis.set(this.getRoomKey(id), JSON.stringify(serialized), 'EX', ROOM_TTL);
+        } else {
+            await kv.set(this.getRoomKey(id), JSON.stringify(serialized), { ex: ROOM_TTL });
+        }
         return room;
     }
 
     async getRoom(id: string): Promise<Room | null> {
-        const data = await kv.get<string>(this.getRoomKey(id));
+        let data: string | null;
+
+        if (useGenericRedis && genericRedis) {
+            data = await genericRedis.get(this.getRoomKey(id));
+        } else {
+            data = await kv.get<string>(this.getRoomKey(id));
+        }
+
         if (!data) return null;
 
         const parsed = JSON.parse(data);
@@ -112,7 +128,13 @@ class Store extends EventEmitter {
     }
 
     async deleteRoom(id: string): Promise<boolean> {
-        const result = await kv.del(this.getRoomKey(id));
+        let result: number;
+
+        if (useGenericRedis && genericRedis) {
+            result = await genericRedis.del(this.getRoomKey(id));
+        } else {
+            result = await kv.del(this.getRoomKey(id));
+        }
         return result > 0;
     }
 
@@ -121,7 +143,12 @@ class Store extends EventEmitter {
             ...room,
             activeUsers: Array.from(room.activeUsers),
         };
-        await kv.set(this.getRoomKey(room.id), JSON.stringify(serialized), { ex: ROOM_TTL });
+
+        if (useGenericRedis && genericRedis) {
+            await genericRedis.set(this.getRoomKey(room.id), JSON.stringify(serialized), 'EX', ROOM_TTL);
+        } else {
+            await kv.set(this.getRoomKey(room.id), JSON.stringify(serialized), { ex: ROOM_TTL });
+        }
     }
 }
 
