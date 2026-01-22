@@ -43,6 +43,32 @@ class RedisStore extends EventEmitter implements IStore {
         return `room:${id}`;
     }
 
+    private async _getRawRoom(id: string): Promise<Room | null> {
+        let data: string | null;
+
+        if (useGenericRedis && genericRedis) {
+            data = await genericRedis.get(this.getRoomKey(id));
+        } else {
+            // @ts-ignore
+            data = await kv.get(this.getRoomKey(id));
+        }
+
+        if (!data) return null;
+
+        let parsed: any;
+        if (typeof data === 'object') {
+            parsed = data;
+        } else {
+            parsed = JSON.parse(data);
+        }
+
+        // Deserialize Array back to Set
+        return {
+            ...parsed,
+            activeUsers: new Set(parsed.activeUsers || []),
+        };
+    }
+
     async subscribe(channel: string): Promise<void> {
         if (pubSubRedis) {
             await pubSubRedis.subscribe(channel);
@@ -95,29 +121,9 @@ class RedisStore extends EventEmitter implements IStore {
     }
 
     async getRoom(id: string): Promise<Room | null> {
-        let data: string | null;
+        const room = await this._getRawRoom(id);
+        if (!room) return null;
 
-        if (useGenericRedis && genericRedis) {
-            data = await genericRedis.get(this.getRoomKey(id));
-        } else {
-            // @ts-ignore
-            data = await kv.get(this.getRoomKey(id));
-        }
-
-        if (!data) return null;
-
-        let parsed: any;
-        if (typeof data === 'object') {
-            parsed = data;
-        } else {
-            parsed = JSON.parse(data);
-        }
-
-        // Deserialize Array back to Set
-        const room = {
-            ...parsed,
-            activeUsers: new Set(parsed.activeUsers || []),
-        };
 
         // Strip adminKey to avoid leaking it
         delete room.adminKey;
@@ -150,7 +156,7 @@ class RedisStore extends EventEmitter implements IStore {
     }
 
     async joinRoom(id: string, userName: string): Promise<boolean> {
-        const room = await this.getRoom(id);
+        const room = await this._getRawRoom(id);
         if (!room) return false;
 
         if (!room.users.includes(userName)) {
@@ -161,7 +167,7 @@ class RedisStore extends EventEmitter implements IStore {
     }
 
     async addActiveUser(roomId: string, userName: string): Promise<void> {
-        const room = await this.getRoom(roomId);
+        const room = await this._getRawRoom(roomId);
         if (!room) return;
 
         room.activeUsers.add(userName);
@@ -175,7 +181,7 @@ class RedisStore extends EventEmitter implements IStore {
     }
 
     async removeActiveUser(roomId: string, userName: string): Promise<void> {
-        const room = await this.getRoom(roomId);
+        const room = await this._getRawRoom(roomId);
         if (!room) return;
 
         room.activeUsers.delete(userName);
@@ -189,7 +195,7 @@ class RedisStore extends EventEmitter implements IStore {
     }
 
     async addMessage(roomId: string, message: Omit<Message, 'id' | 'timestamp'>): Promise<Message | null> {
-        const room = await this.getRoom(roomId);
+        const room = await this._getRawRoom(roomId);
         if (!room) return null;
 
         const newMessage: Message = {
@@ -212,17 +218,9 @@ class RedisStore extends EventEmitter implements IStore {
     }
 
     async deleteRoom(id: string, adminKey: string): Promise<boolean> {
-        let roomData: string | null;
-        if (useGenericRedis && genericRedis) {
-            roomData = await genericRedis.get(this.getRoomKey(id));
-        } else {
-            // @ts-ignore
-            roomData = await kv.get(this.getRoomKey(id));
-        }
+        const room = await this._getRawRoom(id);
 
-        if (!roomData) return false;
-
-        const room = typeof roomData === 'object' ? roomData : JSON.parse(roomData);
+        if (!room) return false;
         if (room.adminKey !== adminKey) return false;
 
         let result: number;

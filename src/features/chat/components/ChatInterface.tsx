@@ -23,6 +23,7 @@ export function ChatInterface({ roomId }: { roomId: string }) {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     // Load user from local storage
     useEffect(() => {
@@ -212,6 +213,10 @@ export function ChatInterface({ roomId }: { roomId: string }) {
             alert('Failed to send message. Please try again or refresh.');
         } finally {
             setIsSending(false);
+            // Keep focus on input after sending
+            setTimeout(() => {
+                inputRef.current?.focus();
+            }, 10);
         }
     };
 
@@ -448,6 +453,10 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                                             onEmojiClick={(emojiData) => {
                                                 setNewMessage(prev => prev + emojiData.emoji);
                                                 setShowEmojiPicker(false);
+                                                // Focus back to input after emoji pick
+                                                setTimeout(() => {
+                                                    inputRef.current?.focus();
+                                                }, 10);
                                             }}
                                             lazyLoadEmojis={true}
                                             searchDisabled={false}
@@ -461,6 +470,7 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                         <form onSubmit={handleSendMessage} className="flex-1 flex gap-2">
                             <input
                                 type="text"
+                                ref={inputRef}
                                 value={newMessage}
                                 onChange={(e) => {
                                     setNewMessage(e.target.value);
@@ -469,6 +479,7 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                                 disabled={isSending}
                                 className="flex-1 bg-transparent border-none text-white px-2 py-3 focus:outline-none placeholder:text-zinc-600 font-medium disabled:opacity-50"
                                 placeholder={isSending ? "Sending..." : "Type an encrypted message..."}
+                                autoFocus
                             />
                             <button
                                 type="submit"
