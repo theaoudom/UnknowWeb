@@ -22,6 +22,7 @@ export function ChatInterface({ roomId }: { roomId: string }) {
     const [isAdmin, setIsAdmin] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
     // Load user from local storage
     useEffect(() => {
@@ -126,6 +127,35 @@ export function ChatInterface({ roomId }: { roomId: string }) {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, typingUsers]);
+
+    // Room Countdown Timer
+    useEffect(() => {
+        if (!room?.createdAt) return;
+
+        const TTL_MS = 30 * 60 * 1000; // 30 minutes
+        const updateTimer = () => {
+            const now = Date.now();
+            const elapsed = now - room.createdAt;
+            const remaining = Math.max(0, Math.floor((TTL_MS - elapsed) / 1000));
+
+            setTimeLeft(remaining);
+
+            if (remaining <= 0) {
+                alert('This secure room has reached its end of life and has been deleted.');
+                router.push('/');
+            }
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000);
+        return () => clearInterval(interval);
+    }, [room?.createdAt, router]);
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
 
     // Typing logic
     const handleTyping = () => {
@@ -255,6 +285,17 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                                 <span>Encrypted</span>
                                 <span className="w-1 h-1 rounded-full bg-zinc-700" />
                                 <span>Ephemeral</span>
+                                {timeLeft !== null && (
+                                    <>
+                                        <span className="w-1 h-1 rounded-full bg-zinc-700" />
+                                        <span className={cn(
+                                            "font-mono font-bold tracking-wider",
+                                            timeLeft < 60 ? "text-red-500 animate-pulse" : "text-zinc-400"
+                                        )}>
+                                            DESTRUCT IN: {formatTime(timeLeft)}
+                                        </span>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 import { kv } from '@vercel/kv';
 import Redis from 'ioredis';
 
-const ROOM_TTL = 60 * 60 * 24; // 24 hours in seconds
+const ROOM_TTL = 60 * 30; // 30 minutes in seconds
 
 // Support both KV (REST API) and generic Redis URL
 const useGenericRedis = !!process.env.REDIS_URL;
@@ -23,7 +23,7 @@ interface IStore {
     getMessages(roomId: string): Promise<Message[] | null>;
     deleteRoom(id: string, adminKey: string): Promise<boolean>;
     getAllRooms(): Promise<Room[]>;
-    emitTyping(roomId: string, data: any): Promise<void>;
+    emitTyping(roomId: string, data: unknown): Promise<void>;
     subscribe(channel: string): Promise<void>;
     unsubscribe(channel: string): Promise<void>;
 }
@@ -236,7 +236,7 @@ class RedisStore extends EventEmitter implements IStore {
         return result > 0;
     }
 
-    async emitTyping(roomId: string, data: any): Promise<void> {
+    async emitTyping(roomId: string, data: unknown): Promise<void> {
         await this.publish(`typing:${roomId}`, data);
     }
 
@@ -260,6 +260,17 @@ class InMemoryStore extends EventEmitter implements IStore {
     constructor() {
         super();
         console.warn('⚠️ USING IN-MEMORY STORE: Data will be lost on restart.');
+
+        // Simple cleanup interval for in-memory store
+        setInterval(() => {
+            const now = Date.now();
+            for (const [id, room] of this.rooms.entries()) {
+                if (now - room.createdAt > ROOM_TTL * 1000) {
+                    this.rooms.delete(id);
+                    console.log(`[MemoryStore] Room ${id} expired and was deleted.`);
+                }
+            }
+        }, 60 * 1000); // Check every minute
     }
 
     async createRoom(name: string, creatorName: string): Promise<{ room: Room; adminKey: string }> {
@@ -363,7 +374,7 @@ class InMemoryStore extends EventEmitter implements IStore {
         return this.rooms.delete(id);
     }
 
-    async emitTyping(roomId: string, data: any): Promise<void> {
+    async emitTyping(roomId: string, data: unknown): Promise<void> {
         this.emit(`typing:${roomId}`, data);
     }
 
