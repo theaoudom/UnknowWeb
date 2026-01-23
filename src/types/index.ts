@@ -3,6 +3,7 @@ export interface Message {
     senderId: string; // Anonymous ID (e.g., User A, User B, or simple random string)
     senderName: string;
     content: string;
+    image?: string; // Base64 encoded image
     timestamp: number;
 }
 
@@ -35,4 +36,5 @@ export type SendMessageRequest = {
     senderId: string;
     senderName: string;
     content: string;
+    image?: string;
 };

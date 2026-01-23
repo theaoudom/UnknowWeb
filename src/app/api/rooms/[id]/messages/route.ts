@@ -27,9 +27,10 @@ export async function POST(request: Request, props: Props) {
     try {
         const body: SendMessageRequest = await request.json();
 
-        if (!body.senderId || !body.senderName || !body.content) {
+        // Allow message with either content OR image (or both)
+        if (!body.senderId || !body.senderName || (!body.content && !body.image)) {
             return NextResponse.json(
-                { error: 'Missing required fields' },
+                { error: 'Missing required fields (content or image)' },
                 { status: 400 }
             );
         }
@@ -37,7 +38,8 @@ export async function POST(request: Request, props: Props) {
         const message = await store.addMessage(params.id, {
             senderId: body.senderId,
             senderName: body.senderName,
-            content: body.content,
+            content: body.content || '', // Ensure string if undefined
+            image: body.image,
         });
 
         if (!message) {

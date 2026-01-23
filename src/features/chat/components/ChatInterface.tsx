@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Message, Room } from '@/types';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
-import { Trash2, Send, LogOut, ShieldCheck, User, Users, Ghost, Smile } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Trash2, Send, LogOut, ShieldCheck, User, Users, Ghost, Smile, Paperclip, ImageIcon, X } from 'lucide-react';
+import { cn, compressImage } from '@/lib/utils';
 
 export function ChatInterface({ roomId }: { roomId: string }) {
     const router = useRouter();
@@ -23,7 +23,9 @@ export function ChatInterface({ roomId }: { roomId: string }) {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Load user from local storage
     useEffect(() => {
@@ -178,11 +180,43 @@ export function ChatInterface({ roomId }: { roomId: string }) {
         }, 2000);
     }
 
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const compressed = await compressImage(file);
+            setSelectedImage(compressed);
+        } catch (error) {
+            console.error('Image processing failed', error);
+            alert('Failed to process image. Try a smaller one.');
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const handlePaste = async (e: React.ClipboardEvent) => {
+        const items = e.clipboardData.items;
+        for (const item of items) {
+            if (item.type.indexOf('image') !== -1) {
+                const file = item.getAsFile();
+                if (file) {
+                    try {
+                        const compressed = await compressImage(file);
+                        setSelectedImage(compressed);
+                    } catch (error) {
+                        console.error('Paste failed', error);
+                    }
+                }
+                break;
+            }
+        }
+    };
+
     const [isSending, setIsSending] = useState(false);
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !currentUser || isSending) return;
+        if ((!newMessage.trim() && !selectedImage) || !currentUser || isSending) return;
 
         setIsSending(true);
 
@@ -202,12 +236,14 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                     senderId: currentUser,
                     senderName: currentUser,
                     content: newMessage,
+                    image: selectedImage
                 }),
             });
 
             if (!res.ok) throw new Error('Failed to send');
 
             setNewMessage('');
+            setSelectedImage(null);
         } catch (error) {
             console.error('Failed to send message:', error);
             alert('Failed to send message. Please try again or refresh.');
@@ -393,6 +429,11 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                                                 ? "bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded-tr-sm shadow-indigo-900/20"
                                                 : "bg-zinc-800/80 backdrop-blur-sm border border-zinc-700/50 text-zinc-100 rounded-tl-sm hover:bg-zinc-800 shadow-lg"
                                         )}>
+                                            {msg.image && (
+                                                <div className="mb-2 rounded-lg overflow-hidden border border-white/10">
+                                                    <img src={msg.image} alt="Encrypted attachment" className="w-full max-h-[300px] object-cover" />
+                                                </div>
+                                            )}
                                             {msg.content}
                                         </div>
                                     </div>
@@ -426,7 +467,48 @@ export function ChatInterface({ roomId }: { roomId: string }) {
 
                 {/* Input Area */}
                 <div className="p-4 sm:p-6 bg-gradient-to-t from-black via-zinc-950/80 to-transparent">
+                    {/* Image Preview */}
+                    <AnimatePresence>
+                        {selectedImage && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className="mb-4 relative w-fit group"
+                            >
+                                <img src={selectedImage} alt="Preview" className="h-40 rounded-xl border border-zinc-700 shadow-2xl object-cover bg-zinc-900" />
+                                <button
+                                    onClick={() => setSelectedImage(null)}
+                                    className="absolute -top-2 -right-2 p-1 bg-zinc-800 text-white rounded-full border border-zinc-700 shadow-lg hover:bg-red-500 hover:border-red-500 transition-colors"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
                     <div className="relative bg-zinc-900/90 backdrop-blur-md rounded-2xl border border-zinc-800 shadow-2xl p-2 flex items-center gap-2 ring-1 ring-white/5 focus-within:ring-violet-500/50 focus-within:border-violet-500/50 transition-all duration-300">
+                        {/* Image Upload Button */}
+                        <input
+                            type="file"
+                            accept="image/*"
+                            ref={fileInputRef}
+                            className="hidden"
+                            onChange={handleFileSelect}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className={cn(
+                                "p-3 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-purple-400 transition-colors",
+                                selectedImage && "text-purple-400 bg-zinc-800"
+                            )}
+                            title="Upload Image"
+                        >
+                            <ImageIcon size={20} />
+                        </button>
+                        <div className="w-px h-6 bg-zinc-800" />
+
                         {/* Emoji Picker Button */}
                         <div className="relative">
                             <button
@@ -480,10 +562,11 @@ export function ChatInterface({ roomId }: { roomId: string }) {
                                 className="flex-1 bg-transparent border-none text-white px-2 py-3 focus:outline-none placeholder:text-zinc-600 font-medium disabled:opacity-50"
                                 placeholder={isSending ? "Sending..." : "Type an encrypted message..."}
                                 autoFocus
+                                onPaste={handlePaste}
                             />
                             <button
                                 type="submit"
-                                disabled={!newMessage.trim() || isSending}
+                                disabled={(!newMessage.trim() && !selectedImage) || isSending}
                                 className="p-3 bg-white text-black rounded-xl hover:bg-zinc-200 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 disabled:bg-zinc-800 disabled:text-zinc-600 shadow-lg shadow-white/5 flex items-center justify-center"
                             >
                                 {isSending ? (
