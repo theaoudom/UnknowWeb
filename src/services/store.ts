@@ -125,6 +125,11 @@ class RedisStore extends EventEmitter implements IStore {
         if (!room) return null;
 
 
+        // Strict expiry check
+        if (Date.now() - room.createdAt > ROOM_TTL * 1000) {
+            return null;
+        }
+
         // Strip adminKey to avoid leaking it
         delete room.adminKey;
         return room;
@@ -293,6 +298,11 @@ class InMemoryStore extends EventEmitter implements IStore {
     async getRoom(id: string): Promise<Room | null> {
         const room = this.rooms.get(id);
         if (!room) return null;
+
+        // Strict expiry check
+        if (Date.now() - room.createdAt > ROOM_TTL * 1000) {
+            return null;
+        }
 
         // Return copy without adminKey
         const { adminKey, ...cleanRoom } = room;
